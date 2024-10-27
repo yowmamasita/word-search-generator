@@ -18,7 +18,7 @@ function App() {
     const longestWordLength = Math.max(
       ...currentWords.map(word => word.length),
       ...words.map(word => word.length),
-      15 // Default minimum
+      10 // Default minimum
     );
     return longestWordLength;
   }, [wordInput, words]);
@@ -105,49 +105,82 @@ function App() {
       );
     }
 
-    // Start word list on new page
-    pdf.addPage();
-    pdf.setFontSize(16);
-    pdf.text('Words to Find:', margins, margins);
-
-    // Calculate word list layout
-    const wordsPerPage = Math.floor((pageHeight - 40) / 7); // 7mm per word, accounting for margins
-    const wordsPerColumn = Math.floor((pageHeight - 40) / 7);
+    // Calculate remaining space on first page
+    const gridEndY = startY + gridHeight;
+    const remainingHeight = pageHeight - gridEndY - margins;
+    
+    // Calculate word list layout parameters
+    const wordsPerRow = Math.floor((pageHeight - 40) / 7); // 7mm per word
     const columnWidth = 60; // Fixed column width in mm
     const maxColumnsPerPage = Math.floor(availableWidth / columnWidth);
+    const totalRows = Math.ceil(puzzle.words.length / maxColumnsPerPage);
+    const requiredHeight = totalRows * 7 + 20; // Add some padding
 
-    // Add words in columns with pagination
-    let currentPage = 1;
-    let currentColumn = 0;
-    let currentRow = 0;
+    // Check if words can fit on first page
+    const startWordsY = gridEndY + 20;
+    if (remainingHeight >= requiredHeight) {
+      // Words can fit on first page
+      pdf.setFontSize(16);
+      pdf.text('Words to Find:', margins, startWordsY);
+      pdf.setFontSize(12);
 
-    pdf.setFontSize(12);
-    puzzle.words.forEach((word, index) => {
-      // Check if we need a new page
-      if (currentColumn >= maxColumnsPerPage) {
-        currentColumn = 0;
-        currentPage++;
-        pdf.addPage();
-        pdf.setFontSize(16);
-        pdf.text('Words to Find (continued):', margins, margins);
-        pdf.setFontSize(12);
-      }
+      let currentColumn = 0;
+      let currentRow = 0;
 
-      // Calculate position
-      const x = margins + (currentColumn * columnWidth);
-      const y = margins + 10 + (currentRow * 7);
+      puzzle.words.forEach((word, index) => {
+        if (currentColumn >= maxColumnsPerPage) {
+          currentColumn = 0;
+          currentRow++;
+        }
 
-      // Add bullet point and word
-      pdf.text('•', x, y);
-      pdf.text(word, x + 5, y);
+        const x = margins + (currentColumn * columnWidth);
+        const y = startWordsY + 10 + (currentRow * 7);
 
-      // Update position
-      currentRow++;
-      if (currentRow >= wordsPerPage) {
-        currentRow = 0;
+        pdf.text('•', x, y);
+        pdf.text(word, x + 5, y);
+
         currentColumn++;
-      }
-    });
+      });
+    } else {
+      // Need new page for words
+      pdf.addPage();
+      pdf.setFontSize(16);
+      pdf.text('Words to Find:', margins, margins);
+
+      let currentColumn = 0;
+      let currentRow = 0;
+
+      pdf.setFontSize(12);
+      puzzle.words.forEach((word, index) => {
+        if (currentColumn >= maxColumnsPerPage) {
+          currentColumn = 0;
+          currentRow++;
+          if (currentRow >= wordsPerRow) {
+            currentRow = 0;
+            currentColumn++;
+            if (currentColumn >= maxColumnsPerPage) {
+              currentColumn = 0;
+              pdf.addPage();
+              pdf.setFontSize(16);
+              pdf.text('Words to Find (continued):', margins, margins);
+              pdf.setFontSize(12);
+            }
+          }
+        }
+
+        const x = margins + (currentColumn * columnWidth);
+        const y = margins + 10 + (currentRow * 7);
+
+        pdf.text('•', x, y);
+        pdf.text(word, x + 5, y);
+
+        currentRow++;
+        if (currentRow >= wordsPerRow) {
+          currentRow = 0;
+          currentColumn++;
+        }
+      });
+    }
 
     pdf.save('word-search-puzzle.pdf');
   };
