@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Development service
+  dev:
+    build:
+      context: .
+      target: build
+    image: word-search-generator-dev
+    container_name: word-search-generator-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - VITE_HOST=0.0.0.0
+
+  # Production service
+  prod:
+    build:
+      context: .
+    image: word-search-generator-prod
+    container_name: word-search-generator-prod
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
