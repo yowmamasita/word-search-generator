@@ -8,6 +8,7 @@ function App() {
   const [gridSize, setGridSize] = useState(50);
   const [words, setWords] = useState<string[]>([]);
   const [puzzle, setPuzzle] = useState<{ grid: string[][], words: string[] } | null>(null);
+  const [allowBackwards, setAllowBackwards] = useState(false);
 
   const minGridSize = useMemo(() => {
     const currentWords = wordInput
@@ -35,7 +36,7 @@ function App() {
       // Ensure grid size is at least as large as the longest word
       const effectiveGridSize = Math.max(gridSize, minGridSize);
       setGridSize(effectiveGridSize);
-      setPuzzle(generateWordSearch(newWords, effectiveGridSize));
+      setPuzzle(generateWordSearch(newWords, effectiveGridSize, allowBackwards));
     }
   };
 
@@ -226,6 +227,18 @@ function App() {
                   {Math.max(gridSize, minGridSize)}x{Math.max(gridSize, minGridSize)}
                 </span>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allowBackwards}
+                  onChange={(e) => setAllowBackwards(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Allow backwards words</span>
+              </label>
             </div>
 
             <button

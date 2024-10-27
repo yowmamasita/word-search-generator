@@ -1,4 +1,4 @@
-export const generateWordSearch = (words: string[], gridSize: number = 50) => {
+export const generateWordSearch = (words: string[], gridSize: number = 50, allowBackwards: boolean = false) => {
   const GRID_SIZE = gridSize;
   const grid: string[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(''));
   const processedWords = words
@@ -20,12 +20,23 @@ export const generateWordSearch = (words: string[], gridSize: number = 50) => {
     .slice(0, 10)
     .map(([letter]) => letter);
 
-  const directions = [
+  const forwardDirections = [
     [0, 1],   // right
     [1, 0],   // down
     [1, 1],   // diagonal right down
     [-1, 1],  // diagonal right up
   ];
+
+  const backwardDirections = [
+    [0, -1],  // left
+    [-1, 0],  // up
+    [-1, -1], // diagonal left up
+    [1, -1],  // diagonal left down
+  ];
+
+  const directions = allowBackwards 
+    ? [...forwardDirections, ...backwardDirections]
+    : forwardDirections;
 
   const findWordOccurrences = (word: string): number => {
     let count = 0;
