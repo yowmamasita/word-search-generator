@@ -1,3 +1,8 @@
+export type WordPosition = {
+  word: string;
+  positions: { row: number; col: number }[];
+};
+
 export const generateWordSearch = (words: string[], gridSize: number = 50, allowBackwards: boolean = false) => {
   const GRID_SIZE = gridSize;
   const grid: string[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(''));
@@ -5,6 +10,8 @@ export const generateWordSearch = (words: string[], gridSize: number = 50, allow
     .map(word => word.replace(/\s+/g, '').toUpperCase())
     .filter(word => word.length > 0 && word.length <= GRID_SIZE)
     .sort((a, b) => b.length - a.length);
+
+  const wordPositions: WordPosition[] = [];
 
   // Get frequency map of all letters in words
   const letterFreq = new Map<string, number>();
@@ -100,9 +107,14 @@ export const generateWordSearch = (words: string[], gridSize: number = 50, allow
   };
 
   const placeWord = (word: string, row: number, col: number, dRow: number, dCol: number) => {
+    const positions: { row: number; col: number }[] = [];
     for (let i = 0; i < word.length; i++) {
-      grid[row + dRow * i][col + dCol * i] = word[i];
+      const currentRow = row + dRow * i;
+      const currentCol = col + dCol * i;
+      grid[currentRow][currentCol] = word[i];
+      positions.push({ row: currentRow, col: currentCol });
     }
+    wordPositions.push({ word, positions });
   };
 
   // Place words
@@ -133,6 +145,7 @@ export const generateWordSearch = (words: string[], gridSize: number = 50, allow
 
   return {
     grid,
-    words: processedWords
+    words: processedWords,
+    wordPositions
   };
 };

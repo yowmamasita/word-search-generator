@@ -1,14 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { FileText, Download } from 'lucide-react';
-import { generateWordSearch } from './utils/wordSearch';
+import { FileText, Download, Eye, EyeOff } from 'lucide-react';
+import { generateWordSearch, WordPosition } from './utils/wordSearch';
 import { jsPDF } from 'jspdf';
 
 function App() {
   const [wordInput, setWordInput] = useState('');
   const [gridSize, setGridSize] = useState(50);
   const [words, setWords] = useState<string[]>([]);
-  const [puzzle, setPuzzle] = useState<{ grid: string[][], words: string[] } | null>(null);
+  const [puzzle, setPuzzle] = useState<{ grid: string[][], words: string[], wordPositions: WordPosition[] } | null>(null);
   const [allowBackwards, setAllowBackwards] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
 
   const minGridSize = useMemo(() => {
     const currentWords = wordInput
@@ -186,6 +187,13 @@ function App() {
     pdf.save('word-search-puzzle.pdf');
   };
 
+  const isHighlighted = (row: number, col: number) => {
+    if (!showAnswers || !puzzle) return false;
+    return puzzle.wordPositions.some(wp => 
+      wp.positions.some(pos => pos.row === row && pos.col === col)
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-8">
       <div className="max-w-4xl mx-auto">
@@ -279,12 +287,26 @@ function App() {
 
         {puzzle && (
           <div className="bg-white rounded-xl shadow-xl p-8 overflow-x-auto">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Preview</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Preview</h2>
+              <button
+                onClick={() => setShowAnswers(!showAnswers)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
+              >
+                {showAnswers ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showAnswers ? 'Hide Answers' : 'Show Answers'}
+              </button>
+            </div>
             <div className="font-mono text-xs whitespace-pre">
               {puzzle.grid.map((row, i) => (
                 <div key={i} className="flex">
                   {row.map((cell, j) => (
-                    <span key={j} className="w-6 h-6 flex items-center justify-center">
+                    <span 
+                      key={j} 
+                      className={`w-6 h-6 flex items-center justify-center transition-colors ${
+                        isHighlighted(i, j) ? 'bg-yellow-200' : ''
+                      }`}
+                    >
                       {cell}
                     </span>
                   ))}
