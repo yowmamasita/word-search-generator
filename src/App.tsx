@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FileText, Download } from 'lucide-react';
 import { generateWordSearch } from './utils/wordSearch';
 import { jsPDF } from 'jspdf';
@@ -9,6 +9,20 @@ function App() {
   const [words, setWords] = useState<string[]>([]);
   const [puzzle, setPuzzle] = useState<{ grid: string[][], words: string[] } | null>(null);
 
+  const minGridSize = useMemo(() => {
+    const currentWords = wordInput
+      .split(/[\n,]+/)
+      .map(word => word.trim())
+      .filter(word => word.length > 0);
+    
+    const longestWordLength = Math.max(
+      ...currentWords.map(word => word.length),
+      ...words.map(word => word.length),
+      15 // Default minimum
+    );
+    return longestWordLength;
+  }, [wordInput, words]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newWords = wordInput
@@ -18,8 +32,10 @@ function App() {
     
     if (newWords.length > 0) {
       setWords(newWords);
-      setPuzzle(generateWordSearch(newWords, gridSize));
-      setWordInput('');
+      // Ensure grid size is at least as large as the longest word
+      const effectiveGridSize = Math.max(gridSize, minGridSize);
+      setGridSize(effectiveGridSize);
+      setPuzzle(generateWordSearch(newWords, effectiveGridSize));
     }
   };
 
@@ -167,14 +183,14 @@ function App() {
                 <input
                   type="range"
                   id="gridSize"
-                  min="15"
+                  min={minGridSize}
                   max="100"
-                  value={gridSize}
+                  value={Math.max(gridSize, minGridSize)}
                   onChange={(e) => setGridSize(Number(e.target.value))}
                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
                 <span className="text-sm font-medium text-gray-600 min-w-[3rem]">
-                  {gridSize}x{gridSize}
+                  {Math.max(gridSize, minGridSize)}x{Math.max(gridSize, minGridSize)}
                 </span>
               </div>
             </div>
