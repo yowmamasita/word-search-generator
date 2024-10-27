@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Development service
   dev:
@@ -25,6 +23,6 @@ services:
     image: word-search-generator-prod
     container_name: word-search-generator-prod
     ports:
-      - "80:80"
+      - "8123:80"
     environment:
       - NODE_ENV=production
