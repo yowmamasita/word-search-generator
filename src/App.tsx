@@ -1,6 +1,6 @@
 // App.tsx
 import React, { useState, useMemo } from 'react';
-import { FileText, Download, Eye, EyeOff, X } from 'lucide-react';
+import { FileText, Download, Eye, EyeOff, X, Type } from 'lucide-react';
 import { generateWordSearch, WordPosition } from './utils/wordSearch';
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
 
@@ -21,6 +21,7 @@ function App() {
   const [allowBackwards, setAllowBackwards] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUpperCase, setIsUpperCase] = useState(false);
 
   // Function to check if a character is an emoji
   const isEmoji = (str: string): boolean => {
@@ -315,6 +316,12 @@ function App() {
     );
   };
 
+  // Function to handle case transformation
+  const transformCase = (text: string) => {
+    if (isEmoji(text)) return text;
+    return isUpperCase ? text.toUpperCase() : text.toLowerCase();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 font-segoe">
       {/* Error Popup */}
@@ -421,7 +428,7 @@ function App() {
                     key={index}
                     className="bg-gray-100 px-3 py-1 rounded-full text-gray-700 font-emoji"
                   >
-                    {word}
+                    {transformCase(word)}
                   </div>
                 ))}
               </div>
@@ -447,17 +454,26 @@ function App() {
               <h2 className="text-2xl font-bold text-gray-800 font-segoe">
                 Preview
               </h2>
-              <button
-                onClick={() => setShowAnswers(!showAnswers)}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
-              >
-                {showAnswers ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
-                {showAnswers ? 'Hide Answers' : 'Show Answers'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsUpperCase(!isUpperCase)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
+                >
+                  <Type className="w-5 h-5" />
+                  {isUpperCase ? 'UPPERCASE' : 'lowercase'}
+                </button>
+                <button
+                  onClick={() => setShowAnswers(!showAnswers)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
+                >
+                  {showAnswers ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                  {showAnswers ? 'Hide Answers' : 'Show Answers'}
+                </button>
+              </div>
             </div>
             <div className="grid gap-px bg-gray-200">
               {puzzle.grid.map((row, i) => (
@@ -469,7 +485,7 @@ function App() {
                         isHighlighted(i, j) ? 'bg-yellow-200' : ''
                       }`}
                     >
-                      {cell}
+                      {transformCase(cell)}
                     </span>
                   ))}
                 </div>
