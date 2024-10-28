@@ -1,8 +1,22 @@
 // App.tsx
 import React, { useState, useMemo } from 'react';
-import { FileText, Download, Eye, EyeOff, X, Type } from 'lucide-react';
+import { SearchCode, Download, Eye, EyeOff, X, Type } from 'lucide-react';
 import { generateWordSearch, WordPosition } from './utils/wordSearch';
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
+
+// Define an array of background colors for highlighting
+const HIGHLIGHT_COLORS = [
+  'bg-red-200',
+  'bg-blue-200',
+  'bg-green-200',
+  'bg-purple-200',
+  'bg-pink-200',
+  'bg-orange-200',
+  'bg-teal-200',
+  'bg-indigo-200',
+  'bg-yellow-200',
+  'bg-rose-200',
+];
 
 function App() {
   // @ts-ignore
@@ -30,10 +44,11 @@ function App() {
   };
 
   // Function to convert any character to image data URL
-  const charToImageUrl = async (char: string): Promise<string> => {
+  const charToImageUrl = async (char: string, size: number): Promise<string> => {
     const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
+    // Make canvas size dynamic based on the input size
+    canvas.width = size;
+    canvas.height = size;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not get canvas context');
     
@@ -41,10 +56,12 @@ function App() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     ctx.fillStyle = 'black';
-    ctx.font = '24px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    // Scale font size relative to canvas size
+    const fontSize = Math.floor(size * 0.75);
+    ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(char, 16, 16);
+    ctx.fillText(char, size/2, size/2);
     
     return canvas.toDataURL('image/png');
   };
@@ -158,18 +175,23 @@ function App() {
 
           // Handle cell content
           if (isEmoji(cell)) {
-            // Convert emoji to image with adjusted size
+            // Convert emoji to image with dynamic size
             try {
-              const imageUrl = await charToImageUrl(cell);
+              // Use a larger canvas size for better quality, then scale down
+              const canvasSize = Math.ceil(cellSize * 2);
+              const imageUrl = await charToImageUrl(cell, canvasSize);
               const imageBytes = await fetch(imageUrl).then(res => res.arrayBuffer());
               const image = await pdfDoc.embedPng(imageBytes);
-              const imageDims = image.scale(0.65);
+              
+              // Scale the image to fit within the cell while maintaining aspect ratio
+              const scaleFactor = 0.8; // Leave some padding
+              const finalSize = cellSize * scaleFactor;
               
               page.drawImage(image, {
-                x: x + (cellSize - imageDims.width) / 2,
-                y: y - cellSize + (cellSize - imageDims.height) / 2,
-                width: imageDims.width,
-                height: imageDims.height,
+                x: x + (cellSize - finalSize) / 2,
+                y: y - cellSize + (cellSize - finalSize) / 2,
+                width: finalSize,
+                height: finalSize,
               });
             } catch (err) {
               console.error('Failed to embed emoji:', err);
@@ -240,18 +262,19 @@ function App() {
               const char = segment.segment;
               if (isEmoji(char)) {
                 try {
-                  const charUrl = await charToImageUrl(char);
+                  // Use consistent size for word list emojis
+                  const charUrl = await charToImageUrl(char, wordSize * 2);
                   const charBytes = await fetch(charUrl).then(res => res.arrayBuffer());
                   const charImage = await pdfDoc.embedPng(charBytes);
-                  const charDims = charImage.scale(wordSize / 24);
+                  const finalSize = wordSize * 1.2;
                   
                   currentPage.drawImage(charImage, {
                     x: currentX,
-                    y: y - wordSize - (charDims.height / 4),
-                    width: charDims.width,
-                    height: charDims.height,
+                    y: y - wordSize - (finalSize / 4),
+                    width: finalSize,
+                    height: finalSize,
                   });
-                  currentX += wordSize * 1.2;
+                  currentX += finalSize * 1.2;
                 } catch (err) {
                   console.error('Failed to embed emoji in word list:', err);
                 }
@@ -310,10 +333,17 @@ function App() {
 
   // Function to check if a cell should be highlighted (for answers)
   const isHighlighted = (row: number, col: number) => {
-    if (!showAnswers || !puzzle) return false;
-    return puzzle.wordPositions.some((wp) =>
-      wp.positions.some((pos) => pos.row === row && pos.col === col)
-    );
+    if (!showAnswers || !puzzle) return '';
+    
+    // Find which word position this cell belongs to
+    for (let i = 0; i < puzzle.wordPositions.length; i++) {
+      const wp = puzzle.wordPositions[i];
+      if (wp.positions.some(pos => pos.row === row && pos.col === col)) {
+        // Return the color for this word (cycling through colors if more words than colors)
+        return HIGHLIGHT_COLORS[i % HIGHLIGHT_COLORS.length];
+      }
+    }
+    return '';
   };
 
   // Function to handle case transformation
@@ -341,12 +371,17 @@ function App() {
       <div className="max-w-4xl mx-auto">
         {/* Form and options */}
         <div className="bg-white rounded-xl shadow-xl p-6 mb-4">
-          <div className="flex items-center mb-4">
-            <FileText className="w-8 h-8 text-indigo-600 mr-3" />
-            <h1 className="text-3xl font-bold text-gray-800 font-segoe">
-              Word Search Generator
-            </h1>
-          </div>
+            <div className="flex flex-col items-center mb-6">
+            <div className="flex items-center mb-2">
+              <SearchCode className="w-10 h-10 text-indigo-600 mr-3" />
+              <h1 className="text-4xl font-bold text-gray-800 font-segoe">
+              Word Search Puzzle Generator
+              </h1>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-700 font-segoe">
+              wordsearch.sarmiento.cc
+            </h2>
+            </div>
 
           <form onSubmit={handleSubmit} className="mb-6">
             {/* Words input */}
@@ -426,7 +461,7 @@ function App() {
                 {words.map((word, index) => (
                   <div
                     key={index}
-                    className="bg-gray-100 px-3 py-1 rounded-full text-gray-700 font-emoji"
+                    className={`px-3 py-1 rounded-full text-gray-700 font-emoji ${showAnswers ? HIGHLIGHT_COLORS[index % HIGHLIGHT_COLORS.length] : 'bg-gray-100'}`}
                   >
                     {transformCase(word)}
                   </div>
@@ -482,7 +517,7 @@ function App() {
                     <span
                       key={j}
                       className={`w-8 h-8 flex items-center justify-center text-lg bg-white transition-colors font-emoji ${
-                        isHighlighted(i, j) ? 'bg-yellow-200' : ''
+                        isHighlighted(i, j)
                       }`}
                     >
                       {transformCase(cell)}
