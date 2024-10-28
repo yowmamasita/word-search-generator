@@ -17,6 +17,12 @@ function App() {
   const [showAnswers, setShowAnswers] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Function to check if a character is an emoji
+  const isEmoji = (str: string): boolean => {
+    // @ts-ignore
+    return [...new Intl.Segmenter().segment(str)].length !== str.length;
+  };
+
   // Function to convert any character to image data URL
   const charToImageUrl = async (char: string): Promise<string> => {
     const canvas = document.createElement('canvas');
@@ -45,8 +51,10 @@ function App() {
       .filter((word) => word.length > 0);
 
     const longestWordLength = Math.max(
-      ...currentWords.map((word) => Array.from(word).length),
-      ...words.map((word) => Array.from(word).length),
+      // @ts-ignore
+      ...currentWords.map((word) => [...new Intl.Segmenter().segment(word)].length),
+      // @ts-ignore
+      ...words.map((word) => [...new Intl.Segmenter().segment(word)].length),
       10 // Default minimum
     );
     return longestWordLength;
@@ -81,18 +89,19 @@ function App() {
     try {
       const pdfDoc = await PDFDocument.create();
       const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
       
       const page = pdfDoc.addPage([595.276, 841.890]); // A4 size in points
       
-      const margins = 50;
+      const margins = 30;
       const pageWidth = page.getWidth();
       const pageHeight = page.getHeight();
       const availableWidth = pageWidth - 2 * margins;
       const availableHeight = pageHeight - 2 * margins;
 
-      // Add title as text
+      // Add title
       const titleText = 'Word Search Puzzle';
-      const titleSize = 36;
+      const titleSize = 24;
       const titleWidth = helveticaBold.widthOfTextAtSize(titleText, titleSize);
       page.drawText(titleText, {
         x: (pageWidth - titleWidth) / 2,
@@ -101,20 +110,34 @@ function App() {
         font: helveticaBold,
       });
 
-      // Calculate grid dimensions
+      // Add subtitle (website URL)
+      const subtitleText = 'wordsearch.sarmiento.cc';
+      const subtitleSize = 10;
+      const subtitleWidth = helvetica.widthOfTextAtSize(subtitleText, subtitleSize);
+      page.drawText(subtitleText, {
+        x: (pageWidth - subtitleWidth) / 2,
+        y: pageHeight - margins - titleSize - subtitleSize - 2,
+        size: subtitleSize,
+        font: helvetica,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+
+      // Adjust starting Y position
+      const startY = pageHeight - margins - titleSize - subtitleSize - 15;
+
+      // Calculate grid dimensions - make grid slightly smaller
       const cellSize = Math.min(
-        availableWidth / puzzle.grid.length,
-        (availableHeight - 150) / puzzle.grid.length // Increased spacing for title
+        (availableWidth * 0.9) / puzzle.grid.length,
+        (availableHeight * 0.6) / puzzle.grid.length // Reduce grid height to 60% of available height
       );
       const gridWidth = cellSize * puzzle.grid.length;
-      const startX = (pageWidth - gridWidth) / 2;
-      const startY = pageHeight - margins - titleSize - 40; // Adjusted starting position
+      const gridStartX = (pageWidth - gridWidth) / 2;
 
       // Draw grid and letters
       for (let i = 0; i < puzzle.grid.length; i++) {
         for (let j = 0; j < puzzle.grid[i].length; j++) {
           const cell = puzzle.grid[i][j];
-          const x = startX + j * cellSize;
+          const x = gridStartX + j * cellSize;
           const y = startY - i * cellSize;
 
           // Draw cell border
@@ -127,83 +150,96 @@ function App() {
             borderWidth: 0.5,
           });
 
-          // Convert character to image and embed it
-          try {
-            const imageUrl = await charToImageUrl(cell);
-            const imageBytes = await fetch(imageUrl).then(res => res.arrayBuffer());
-            const image = await pdfDoc.embedPng(imageBytes);
-            const imageDims = image.scale(0.5);
-            
-            page.drawImage(image, {
-              x: x + (cellSize - imageDims.width) / 2,
-              y: y - cellSize + (cellSize - imageDims.height) / 2,
-              width: imageDims.width,
-              height: imageDims.height,
+          // Handle cell content
+          if (isEmoji(cell)) {
+            // Convert emoji to image
+            try {
+              const imageUrl = await charToImageUrl(cell);
+              const imageBytes = await fetch(imageUrl).then(res => res.arrayBuffer());
+              const image = await pdfDoc.embedPng(imageBytes);
+              const imageDims = image.scale(0.75);
+              
+              page.drawImage(image, {
+                x: x + (cellSize - imageDims.width) / 2,
+                y: y - cellSize + (cellSize - imageDims.height) / 2,
+                width: imageDims.width,
+                height: imageDims.height,
+              });
+            } catch (err) {
+              console.error('Failed to embed emoji:', err);
+            }
+          } else {
+            // Draw regular text character
+            const fontSize = cellSize * 0.75;
+            page.drawText(cell, {
+              x: x + cellSize * 0.25, // Fixed position at 25% of cell width
+              y: y - cellSize + cellSize * 0.25, // Fixed position at 25% of cell height
+              size: fontSize,
+              font: helvetica,
             });
-          } catch (err) {
-            console.error('Failed to embed character:', err);
           }
         }
       }
 
-      // Add "Words to Find" header as text
-      const headerText = 'Words to Find:';
-      const headerSize = 28;
-      page.drawText(headerText, {
-        x: margins,
-        y: startY - gridWidth - 40,
-        size: headerSize,
-        font: helveticaBold,
-      });
-
-      // Calculate word size based on number of words
-      const wordSize = Math.max(16, Math.min(24, Math.floor(400 / puzzle.words.length)));
-      const wordsStartY = startY - gridWidth - 40 - headerSize;
-      const wordsPerColumn = Math.floor((wordsStartY - margins) / (wordSize * 1.5));
-      const columns = Math.ceil(puzzle.words.length / wordsPerColumn);
+      // Calculate word list position and layout
+      const wordsStartY = startY - gridWidth - 40;
+      const wordSize = 16; // Base size for words
+      const charSpacing = wordSize * 0.8; // Fixed spacing between characters
+      const wordsPerColumn = Math.ceil((wordsStartY - margins) / (wordSize * 2));
+      const totalWords = puzzle.words.length;
+      const columns = Math.ceil(totalWords / wordsPerColumn);
       const columnWidth = availableWidth / columns;
 
-      // Draw words list with all characters as images
+      // Draw all words
       for (let i = 0; i < puzzle.words.length; i++) {
         const word = puzzle.words[i];
         const column = Math.floor(i / wordsPerColumn);
         const row = i % wordsPerColumn;
         const x = margins + column * columnWidth;
-        const y = wordsStartY - row * (wordSize * 1.5); // Adjusted spacing based on word size
+        const y = wordsStartY - row * (wordSize * 2);
 
         // Draw bullet point
-        const bulletImageUrl = await charToImageUrl('•');
-        const bulletImageBytes = await fetch(bulletImageUrl).then(res => res.arrayBuffer());
-        const bulletImage = await pdfDoc.embedPng(bulletImageBytes);
-        const bulletDims = bulletImage.scale(wordSize / 32); // Scale bullet point relative to word size
-        page.drawImage(bulletImage, {
+        page.drawText('-', {
           x,
-          y: y - bulletDims.height / 2,
-          width: bulletDims.width,
-          height: bulletDims.height,
+          y: y - wordSize / 2,
+          size: wordSize,
+          font: helvetica,
         });
 
-        // Draw each character in the word
-        const chars = Array.from(word);
-        let currentX = x + bulletDims.width + 5;
-        
-        for (const char of chars) {
-          try {
-            const imageUrl = await charToImageUrl(char);
-            const imageBytes = await fetch(imageUrl).then(res => res.arrayBuffer());
-            const image = await pdfDoc.embedPng(imageBytes);
-            const imageDims = image.scale(wordSize / 32); // Scale word characters relative to word size
-            
-            page.drawImage(image, {
+        let currentX = x + wordSize + 5;
+        // @ts-ignore
+        const segments = [...new Intl.Segmenter().segment(word)];
+
+        // Process each segment in the word separately
+        for (const segment of segments) {
+          const char = segment.segment;
+          if (isEmoji(char)) {
+            // Handle emoji character
+            try {
+              const charUrl = await charToImageUrl(char);
+              const charBytes = await fetch(charUrl).then(res => res.arrayBuffer());
+              const charImage = await pdfDoc.embedPng(charBytes);
+              const charDims = charImage.scale(wordSize / 24);
+              
+              page.drawImage(charImage, {
+                x: currentX,
+                y: y - wordSize - (charDims.height / 4),
+                width: charDims.width,
+                height: charDims.height,
+              });
+              currentX += charSpacing;
+            } catch (err) {
+              console.error('Failed to embed emoji in word list:', err);
+            }
+          } else {
+            // Handle regular text character
+            page.drawText(char, {
               x: currentX,
-              y: y - imageDims.height / 2,
-              width: imageDims.width,
-              height: imageDims.height,
+              y: y - wordSize,
+              size: wordSize,
+              font: helvetica,
             });
-            currentX += imageDims.width + 2;
-          } catch (err) {
-            console.error('Failed to embed character in word list:', err);
-            currentX += wordSize / 3;
+            currentX += charSpacing;
           }
         }
       }
@@ -232,7 +268,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-8 font-segoe">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 font-segoe">
       {/* Error Popup */}
       {error && (
         <div className="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50">
@@ -249,8 +285,8 @@ function App() {
       {/* Main container */}
       <div className="max-w-4xl mx-auto">
         {/* Form and options */}
-        <div className="bg-white rounded-xl shadow-xl p-8 mb-8">
-          <div className="flex items-center mb-6">
+        <div className="bg-white rounded-xl shadow-xl p-6 mb-4">
+          <div className="flex items-center mb-4">
             <FileText className="w-8 h-8 text-indigo-600 mr-3" />
             <h1 className="text-3xl font-bold text-gray-800 font-segoe">
               Word Search Generator
@@ -358,7 +394,7 @@ function App() {
 
         {/* Puzzle preview */}
         {puzzle && (
-          <div className="bg-white rounded-xl shadow-xl p-8 overflow-x-auto">
+          <div className="bg-white rounded-xl shadow-xl p-6 overflow-x-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold text-gray-800 font-segoe">
                 Preview
