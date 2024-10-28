@@ -152,7 +152,7 @@ function App() {
             width: cellSize,
             height: cellSize,
             borderColor: rgb(0, 0, 0),
-            borderWidth: 0, // Increased border width
+            borderWidth: 0,
           });
 
           // Handle cell content
@@ -162,7 +162,7 @@ function App() {
               const imageUrl = await charToImageUrl(cell);
               const imageBytes = await fetch(imageUrl).then(res => res.arrayBuffer());
               const image = await pdfDoc.embedPng(imageBytes);
-              const imageDims = image.scale(0.65); // Reduced scale to prevent border overlap
+              const imageDims = image.scale(0.65);
               
               page.drawImage(image, {
                 x: x + (cellSize - imageDims.width) / 2,
@@ -188,32 +188,51 @@ function App() {
 
       // Calculate word list position and layout
       const wordSize = 16;
-      const wordsPerColumn = Math.floor((availableHeight * 0.3) / (wordSize * 2)); // Limit height to 30% of available space
-      const maxColumns = 5; // Maximum number of columns
-      const totalWords = puzzle.words.length;
-      const wordsPerPage = wordsPerColumn * maxColumns;
-      const columnWidth = availableWidth / Math.min(maxColumns, Math.ceil(totalWords / wordsPerColumn));
+      const wordSpacing = wordSize * 1.5;
+      const maxColumns = 5;
+
+      // Calculate the width needed for the longest word
+      const getLongestWordWidth = async () => {
+        let maxWidth = 0;
+        for (const word of puzzle.words) {
+          if (isEmoji(word)) {
+            // @ts-ignore
+            maxWidth = Math.max(maxWidth, [...segmenter.segment(word)].length * wordSize * 1.2);
+          } else {
+            maxWidth = Math.max(maxWidth, helvetica.widthOfTextAtSize(word, wordSize));
+          }
+        }
+        return maxWidth + wordSize;
+      };
+
+      const longestWordWidth = await getLongestWordWidth();
+      const columnWidth = Math.max(longestWordWidth + 20, availableWidth / maxColumns);
+      const numColumns = Math.min(maxColumns, Math.floor(availableWidth / columnWidth));
 
       // Function to draw words on a page
-      const drawWordsOnPage = async (startIndex: number, currentPage: PDFPage, helvetica: any) => {
-        const wordsStartY = currentPage === page ? 
+      const drawWordsOnPage = async (startIndex: number, currentPage: PDFPage, isFirstPage: boolean) => {
+        const pageStartY = isFirstPage ? 
           startY - gridWidth - 40 : // First page (after grid)
-          pageHeight - margins - titleSize; // Subsequent pages (from top)
+          pageHeight - margins; // Subsequent pages
 
-        for (let i = 0; i < wordsPerPage && (startIndex + i) < totalWords; i++) {
+        const pageAvailableHeight = isFirstPage ?
+          pageStartY - margins : // First page
+          pageHeight - (2 * margins); // Full height for subsequent pages
+
+        const wordsPerColumn = Math.floor(pageAvailableHeight / wordSpacing);
+        const maxWordsPerPage = wordsPerColumn * numColumns;
+        let wordsDrawn = 0;
+
+        for (let i = 0; i < maxWordsPerPage && (startIndex + i) < puzzle.words.length; i++) {
           const word = puzzle.words[startIndex + i];
           const column = Math.floor(i / wordsPerColumn);
           const row = i % wordsPerColumn;
           const x = margins + column * columnWidth;
-          const y = wordsStartY - row * (wordSize * 2);
+          const y = pageStartY - row * wordSpacing;
 
           let currentX = x + wordSize;
 
-          // Check if word contains any emoji
-          const hasEmoji = isEmoji(word);
-          
-          if (hasEmoji) {
-            // Handle words with emojis character by character
+          if (isEmoji(word)) {
             // @ts-ignore
             const segments = [...segmenter.segment(word)];
             for (const segment of segments) {
@@ -231,23 +250,21 @@ function App() {
                     width: charDims.width,
                     height: charDims.height,
                   });
-                  currentX += wordSize * 1.2; // Consistent spacing for emojis
+                  currentX += wordSize * 1.2;
                 } catch (err) {
                   console.error('Failed to embed emoji in word list:', err);
                 }
               } else {
-                // Draw regular character
                 currentPage.drawText(char, {
                   x: currentX,
                   y: y - wordSize,
                   size: wordSize,
                   font: helvetica,
                 });
-                currentX += helvetica.widthOfTextAtSize(char, wordSize) + 2; // Natural character spacing
+                currentX += helvetica.widthOfTextAtSize(char, wordSize) + 2;
               }
             }
           } else {
-            // Draw regular text word as a single unit
             currentPage.drawText(word, {
               x: currentX,
               y: y - wordSize,
@@ -255,20 +272,23 @@ function App() {
               font: helvetica,
             });
           }
+          wordsDrawn++;
         }
+        return wordsDrawn;
       };
 
       // Draw words across multiple pages if needed
       let currentWordIndex = 0;
       let currentPage = page;
+      let isFirstPage = true;
 
-      while (currentWordIndex < totalWords) {
-        await drawWordsOnPage(currentWordIndex, currentPage, helvetica);
-        currentWordIndex += wordsPerPage;
+      while (currentWordIndex < puzzle.words.length) {
+        const wordsDrawn = await drawWordsOnPage(currentWordIndex, currentPage, isFirstPage);
+        currentWordIndex += wordsDrawn;
         
-        if (currentWordIndex < totalWords) {
-          // Add a new page if there are more words
+        if (currentWordIndex < puzzle.words.length) {
           currentPage = pdfDoc.addPage([595.276, 841.890]);
+          isFirstPage = false;
         }
       }
 
